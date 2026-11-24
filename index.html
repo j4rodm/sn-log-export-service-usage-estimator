@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ServiceNow Log Export Service (LES) Data Usage Estimator</title>
+<style>
+  :root {
+    --midnight: #252B36;
+    --navy: #2A3D5C;
+    --indigo: #4A6FA0;
+    --indigo-light: #8CA5BE;
+    --gold: #D4A94E;
+    --dark-gold: #695C24;
+    --cream: #E0D9D0;
+    --silver: #A0A8B5;
+    --near-black: #1A1A1A;
+    --off-white: #F5F3EF;
+
+    /* Status colors — retain as-is for semantic meaning */
+    --green: #2E7D32;
+    --green-bg: #E8F5E9;
+    --yellow: #F57F17;
+    --yellow-bg: #FFF8E1;
+    --red: #C62828;
+    --red-bg: #FFEBEE;
+
+    --radius: 8px;
+    --shadow: 0 2px 8px rgba(0,0,0,0.25);
+    --shadow-lg: 0 4px 16px rgba(0,0,0,0.35);
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: 'Helvetica Neue', 'Calibri', Arial, sans-serif;
+    background: var(--midnight);
+    color: var(--cream);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+  }
+
+  pre, code {
+    font-family: 'Cascadia Code', 'Consolas', 'Fira Code', monospace;
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--midnight) 100%);
+    color: var(--cream);
+    padding: 32px 24px 28px;
+    text-align: center;
+  }
+  .header h1 {
+    font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    letter-spacing: -0.3px;
+    color: var(--cream);
+  }
+  .header p {
+    font-size: 14px;
+    color: var(--silver);
+    max-width: 540px;
+    margin: 0 auto;
+  }
+
+  /* Container */
+  .container {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 24px 16px 48px;
+  }
+
+  /* Preset Bar */
+  .preset-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .preset-bar .label {
+    font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--silver);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-right: 4px;
+  }
+  .preset-btn {
+    padding: 7px 20px;
+    border: 2px solid var(--gold);
+    background: transparent;
+    color: var(--gold);
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 100px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .preset-btn:hover {
+    background: rgba(212, 169, 78, 0.12);
+  }
+  .preset-btn:focus-visible {
+    outline: 2px solid var(--indigo-light);
+    outline-offset: 2px;
+  }
+  .preset-btn.active {
+    background: var(--gold);
+    color: var(--near-black);
+  }
+  .preset-btn-clear {
+    padding: 7px 16px;
+    border: 2px solid var(--silver);
+    background: transparent;
+    color: var(--silver);
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 100px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-left: 4px;
+  }
+  .preset-btn-clear:hover {
+    border-color: var(--cream);
+    color: var(--cream);
+  }
+  .preset-btn-clear:focus-visible {
+    outline: 2px solid var(--indigo-light);
+    outline-offset: 2px;
+  }
+  #commaToggle[aria-pressed="true"] {
+    border-color: var(--gold);
+    color: var(--gold);
+  }
+  #commaToggle[aria-pressed="false"] {
+    border-color: var(--silver);
+    color: var(--silver);
+  }
+
+  /* Two-column layout */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 768px) {
+    .layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Card */
+  .card {
+    background: var(--navy);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--indigo);
+    overflow: hidden;
+  }
+  .card-header {
+    font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+    background: var(--midnight);
+    border-bottom: 1px solid var(--indigo);
+    padding: 14px 20px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .card-body {
+    padding: 20px;
+  }
+
+  /* Form fields */
+  .field-group {
+    margin-bottom: 20px;
+  }
+  .field-group:last-child {
+    margin-bottom: 0;
+  }
+  .field-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--cream);
+    margin-bottom: 6px;
+  }
+  .field-label code {
+    font-family: 'Cascadia Code', 'Consolas', 'Fira Code', monospace;
+    font-size: 12px;
+    background: rgba(74, 111, 160, 0.25);
+    color: var(--indigo-light);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  .field-sub {
+    font-size: 12px;
+    color: var(--silver);
+    font-weight: 400;
+    margin-bottom: 6px;
+  }
+  .field-row {
+    display: flex;
+    gap: 12px;
+    align-items: end;
+  }
+  .field-row .input-wrap {
+    flex: 1;
+  }
+  .field-row .select-wrap {
+    flex: 0 0 180px;
+  }
+  @media (max-width: 480px) {
+    .field-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .field-row .select-wrap {
+      flex: 1;
+    }
+  }
+
+  input[type="text"],
+  select {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1.5px solid var(--indigo);
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--cream);
+    background: var(--midnight);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23D4A94E' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 32px;
+    color-scheme: dark;
+  }
+  input[type="text"]:focus,
+  select:focus {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(212,169,78,0.18);
+  }
+  input[type="text"]::placeholder {
+    color: var(--silver);
+  }
+
+  /* Tooltip */
+  .tooltip-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(160, 168, 181, 0.2);
+    color: var(--silver);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: help;
+    position: relative;
+    border: none;
+    font-family: inherit;
+    line-height: 1;
+  }
+  .tooltip-trigger:focus-visible {
+    outline: 2px solid var(--indigo-light);
+    outline-offset: 2px;
+  }
+  .tooltip-content {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--near-black);
+    color: var(--cream);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.4;
+    white-space: nowrap;
+    z-index: 100;
+    pointer-events: none;
+    box-shadow: var(--shadow-lg);
+    max-width: 300px;
+    white-space: normal;
+  }
+  .tooltip-content::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--near-black);
+  }
+  .tooltip-trigger:hover .tooltip-content,
+  .tooltip-trigger:focus .tooltip-content {
+    display: block;
+  }
+
+  /* Results panel */
+  .results-sticky {
+    position: sticky;
+    top: 16px;
+  }
+
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(74, 111, 160, 0.3);
+  }
+  .summary-row:last-child {
+    border-bottom: none;
+  }
+  .summary-label {
+    font-size: 13px;
+    color: var(--silver);
+    font-weight: 500;
+  }
+  .summary-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--cream);
+    font-variant-numeric: tabular-nums;
+  }
+  .summary-value.large {
+    font-size: 28px;
+    color: var(--gold);
+  }
+
+  /* Breakdown table */
+  .breakdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 4px;
+  }
+  .breakdown-table th,
+  .breakdown-table td {
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+  .breakdown-table th {
+    font-weight: 600;
+    color: var(--silver);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    font-size: 11px;
+    border-bottom: 2px solid var(--indigo);
+  }
+  .breakdown-table td {
+    border-bottom: 1px solid rgba(74, 111, 160, 0.2);
+    font-variant-numeric: tabular-nums;
+  }
+  .breakdown-table tr:last-child td {
+    border-bottom: none;
+  }
+  .breakdown-table td:not(:first-child),
+  .breakdown-table th:not(:first-child) {
+    text-align: right;
+  }
+  .breakdown-table .source-name code {
+    font-family: 'Cascadia Code', 'Consolas', 'Fira Code', monospace;
+    font-size: 12px;
+    background: rgba(74, 111, 160, 0.25);
+    color: var(--indigo-light);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .breakdown-table tfoot td {
+    font-weight: 700;
+    border-top: 2px solid var(--indigo);
+    border-bottom: none;
+    padding-top: 10px;
+    color: var(--cream);
+  }
+
+  /* Status indicators */
+  .status-card {
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .status-card .indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .status-green {
+    background: var(--green-bg);
+    color: var(--green);
+  }
+  .status-green .indicator { background: var(--green); }
+  .status-yellow {
+    background: var(--yellow-bg);
+    color: var(--yellow);
+  }
+  .status-yellow .indicator { background: var(--yellow); }
+  .status-red {
+    background: var(--red-bg);
+    color: var(--red);
+  }
+  .status-red .indicator { background: var(--red); }
+
+  /* Gauge bars */
+  .gauge {
+    margin-top: 16px;
+  }
+  .gauge-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
+  }
+  .gauge-label-text {
+    font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--silver);
+  }
+  .gauge-label-value {
+    font-size: 14px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--cream);
+  }
+  .gauge-track {
+    height: 8px;
+    background: rgba(74, 111, 160, 0.25);
+    border-radius: 100px;
+    overflow: hidden;
+    position: relative;
+  }
+  .gauge-fill {
+    height: 100%;
+    border-radius: 100px;
+    transition: width 0.3s ease, background 0.3s ease;
+    min-width: 0;
+  }
+  .gauge-fill.green { background: var(--green); }
+  .gauge-fill.yellow { background: var(--yellow); }
+  .gauge-fill.red { background: var(--red); }
+
+  /* Starter tier verdict */
+  .verdict {
+    margin-top: 16px;
+    padding: 14px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    border: 2px solid;
+  }
+  .verdict.within {
+    background: var(--green-bg);
+    color: var(--green);
+    border-color: var(--green);
+  }
+  .verdict.over {
+    background: var(--red-bg);
+    color: var(--red);
+    border-color: var(--red);
+  }
+  .verdict.close {
+    background: var(--yellow-bg);
+    color: var(--yellow);
+    border-color: var(--yellow);
+  }
+  .verdict.empty {
+    background: rgba(42, 61, 92, 0.5);
+    color: var(--silver);
+    border-color: var(--indigo);
+  }
+
+  /* Collapsible sections */
+  .collapsible {
+    margin-top: 24px;
+  }
+  .collapsible summary {
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gold);
+    padding: 12px 16px;
+    background: var(--navy);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--indigo);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+  }
+  .collapsible summary::-webkit-details-marker {
+    display: none;
+  }
+  .collapsible summary::before {
+    content: '\25B6';
+    font-size: 10px;
+    transition: transform 0.2s ease;
+    display: inline-block;
+  }
+  .collapsible[open] summary::before {
+    transform: rotate(90deg);
+  }
+  .collapsible summary:hover {
+    background: rgba(42, 61, 92, 0.8);
+  }
+  .collapsible summary:focus-visible {
+    outline: 2px solid var(--indigo-light);
+    outline-offset: 2px;
+  }
+  .collapsible .collapsible-body {
+    background: var(--off-white);
+    border-radius: 0 0 var(--radius) var(--radius);
+    border: 1px solid rgba(74, 111, 160, 0.3);
+    padding: 16px 20px;
+    margin-top: -4px;
+    color: var(--near-black);
+  }
+  .collapsible .collapsible-body h4 {
+    color: var(--near-black);
+  }
+  .collapsible .collapsible-body p {
+    color: var(--near-black);
+  }
+  .collapsible pre {
+    background: var(--near-black);
+    color: var(--cream);
+    padding: 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.5;
+    font-family: 'Cascadia Code', 'Consolas', 'Fira Code', monospace;
+    margin: 12px 0;
+  }
+  .collapsible pre .comment {
+    color: #7CB342;
+  }
+  .collapsible pre .keyword {
+    color: #CE93D8;
+  }
+  .collapsible pre .string {
+    color: #FFB74D;
+  }
+  .collapsible pre .method {
+    color: #4FC3F7;
+  }
+  .collapsible .query-block + .query-block {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(74, 111, 160, 0.3);
+  }
+  .collapsible .query-block h4 {
+    font-size: 13px;
+    color: var(--near-black);
+    margin-bottom: 4px;
+  }
+
+  /* Disclaimer */
+  .disclaimer {
+    margin-top: 24px;
+    padding: 16px 20px;
+    background: var(--navy);
+    border: 1px solid var(--indigo);
+    border-radius: var(--radius);
+    font-size: 12px;
+    color: var(--silver);
+    line-height: 1.6;
+  }
+  .disclaimer strong {
+    color: var(--cream);
+  }
+
+  /* Separator */
+  .section-sep {
+    border: none;
+    border-top: 1px solid rgba(74, 111, 160, 0.3);
+    margin: 16px 0;
+  }
+
+  /* Zero state */
+  .zero-state {
+    text-align: center;
+    padding: 24px 16px;
+    color: var(--silver);
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>ServiceNow Log Export Service (LES) Data Usage Estimator</h1>
+  <p>Estimate how much data your ServiceNow instance will generate through LES — based on table record counts and node log volume.</p>
+</div>
+
+<div class="container">
+
+  <!-- Preset Bar -->
+  <div class="preset-bar" role="group" aria-label="Instance size presets">
+    <span class="label">Quick Size:</span>
+    <button type="button" class="preset-btn" data-preset="small" aria-pressed="false">Small</button>
+    <button type="button" class="preset-btn" data-preset="medium" aria-pressed="false">Medium</button>
+    <button type="button" class="preset-btn" data-preset="large" aria-pressed="false">Large</button>
+    <button type="button" class="preset-btn-clear" id="clearBtn" aria-label="Clear all inputs">Clear</button>
+    <button type="button" class="preset-btn-clear" id="commaToggle" aria-pressed="true">1,000 separators: ON</button>
+  </div>
+
+  <div class="layout">
+
+    <!-- LEFT: Inputs -->
+    <div class="inputs-col">
+      <div class="card">
+        <div class="card-header">Table-Based Sources</div>
+        <div class="card-body">
+
+          <!-- syslog -->
+          <div class="field-group">
+            <label class="field-label" for="syslog">
+              <code>syslog</code>
+              <span>records / month</span>
+              <button type="button" class="tooltip-trigger" aria-label="Info about syslog conversion factor">
+                &#8505;
+                <span class="tooltip-content">Conversion: 12,900 records per 1 MB of physical DB storage. Measured from a production instance (June 2026).</span>
+              </button>
+            </label>
+            <input type="text" id="syslog" data-min="0" placeholder="e.g. 7,500,000" inputmode="numeric" pattern="[0-9,]*">
+          </div>
+
+          <!-- syslog_transaction -->
+          <div class="field-group">
+            <label class="field-label" for="syslog_transaction">
+              <code>syslog_transaction</code>
+              <span>records / month</span>
+              <button type="button" class="tooltip-trigger" aria-label="Info about syslog_transaction conversion factor">
+                &#8505;
+                <span class="tooltip-content">Conversion: 780 records per 1 MB of physical DB storage. These records are larger on average than syslog entries.</span>
+              </button>
+            </label>
+            <input type="text" id="syslog_transaction" data-min="0" placeholder="e.g. 2,000,000" inputmode="numeric" pattern="[0-9,]*">
+          </div>
+
+          <!-- sys_audit -->
+          <div class="field-group">
+            <label class="field-label" for="sys_audit">
+              <code>sys_audit</code>
+              <span>records / month</span>
+              <button type="button" class="tooltip-trigger" aria-label="Info about sys_audit conversion factor">
+                &#8505;
+                <span class="tooltip-content">Conversion: 1,788 records per 1 MB of physical DB storage. Confirmed from instance measurements.</span>
+              </button>
+            </label>
+            <input type="text" id="sys_audit" data-min="0" placeholder="e.g. 3,000,000" inputmode="numeric" pattern="[0-9,]*">
+          </div>
+
+          <!-- sys_outbound_http_log -->
+          <div class="field-group">
+            <label class="field-label" for="sys_outbound_http_log">
+              <code>sys_outbound_http_log</code>
+              <span>records / month</span>
+              <button type="button" class="tooltip-trigger" aria-label="Info about sys_outbound_http_log conversion factor">
+                &#8505;
+                <span class="tooltip-content">Conversion: 900 records per 1 MB of physical DB storage. Measured from a production instance (August 2026).</span>
+              </button>
+            </label>
+            <input type="text" id="sys_outbound_http_log" data-min="0" placeholder="e.g. 2,500,000" inputmode="numeric" pattern="[0-9,]*">
+          </div>
+
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 16px;">
+        <div class="card-header">Node Logs</div>
+        <div class="card-body">
+          <div class="field-group">
+            <label class="field-label" for="node_count">
+              Number of Nodes
+              <button type="button" class="tooltip-trigger" aria-label="Info about node log baseline">
+                &#8505;
+                <span class="tooltip-content">Baseline: ~30 GB/node/month at Info+Warn+Error threshold. Measured from a 2-node OOB lab producing ~60 GB/month total. Actual volumes vary widely by instance configuration, customizations, and background noise.</span>
+              </button>
+            </label>
+            <div class="field-row">
+              <div class="input-wrap">
+                <input type="text" id="node_count" data-min="0" placeholder="e.g. 6" inputmode="numeric" pattern="[0-9,]*">
+              </div>
+              <div class="select-wrap">
+                <label for="log_level" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Log severity threshold</label>
+                <select id="log_level">
+                  <option value="info" selected>Error + Warn + Info</option>
+                  <option value="warn">Error + Warn</option>
+                  <option value="error">Error only</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Results -->
+    <div class="results-col">
+      <div class="results-sticky">
+
+        <!-- Summary -->
+        <div class="card">
+          <div class="card-header">Estimated Data Volume</div>
+          <div class="card-body" id="summaryPanel">
+            <div class="summary-row">
+              <span class="summary-label">Total per day</span>
+              <span class="summary-value large" id="totalGbDay">0.00 GB</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">Total per month</span>
+              <span class="summary-value large" id="totalGbMonth">0.00 GB</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Breakdown -->
+        <div class="card" style="margin-top: 16px;">
+          <div class="card-header">Breakdown by Source</div>
+          <div class="card-body">
+            <table class="breakdown-table" aria-label="Data usage breakdown by source">
+              <thead>
+                <tr>
+                  <th scope="col">Source</th>
+                  <th scope="col">GB / day</th>
+                  <th scope="col">GB / month</th>
+                </tr>
+              </thead>
+              <tbody id="breakdownBody">
+                <tr>
+                  <td class="source-name"><code>syslog</code></td>
+                  <td id="bd_syslog_day">0.00</td>
+                  <td id="bd_syslog_month">0.00</td>
+                </tr>
+                <tr>
+                  <td class="source-name"><code>syslog_transaction</code></td>
+                  <td id="bd_syslog_transaction_day">0.00</td>
+                  <td id="bd_syslog_transaction_month">0.00</td>
+                </tr>
+                <tr>
+                  <td class="source-name"><code>sys_audit</code></td>
+                  <td id="bd_sys_audit_day">0.00</td>
+                  <td id="bd_sys_audit_month">0.00</td>
+                </tr>
+                <tr>
+                  <td class="source-name"><code>sys_outbound_http_log</code></td>
+                  <td id="bd_sys_outbound_http_log_day">0.00</td>
+                  <td id="bd_sys_outbound_http_log_month">0.00</td>
+                </tr>
+                <tr>
+                  <td class="source-name">Node logs</td>
+                  <td id="bd_node_day">0.00</td>
+                  <td id="bd_node_month">0.00</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>Total</td>
+                  <td id="bd_total_day">0.00</td>
+                  <td id="bd_total_month">0.00</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <!-- Gauges and status -->
+        <div class="card" style="margin-top: 16px;">
+          <div class="card-header">Capacity Assessment</div>
+          <div class="card-body">
+
+            <!-- Throughput cap gauge -->
+            <div class="gauge">
+              <div class="gauge-label">
+                <span class="gauge-label-text">Daily throughput cap (2 MB/s = 172.8 GB/day)</span>
+                <span class="gauge-label-value" id="capPctText">0.0%</span>
+              </div>
+              <div class="gauge-track" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Percentage of daily throughput cap" id="capGauge">
+                <div class="gauge-fill green" id="capFill" style="width:0%"></div>
+              </div>
+            </div>
+
+            <!-- Starter tier gauge -->
+            <div class="gauge" style="margin-top: 20px;">
+              <div class="gauge-label">
+                <span class="gauge-label-text">Starter tier (100 GB/month, no cost)</span>
+                <span class="gauge-label-value" id="starterPctText">0.0%</span>
+              </div>
+              <div class="gauge-track" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Percentage of Starter tier" id="starterGauge">
+                <div class="gauge-fill green" id="starterFill" style="width:0%"></div>
+              </div>
+            </div>
+
+            <!-- Verdict -->
+            <div class="verdict empty" id="verdict">
+              Enter data above to see your estimate.
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- How to query -->
+  <details class="collapsible">
+    <summary>How to query your instance for record counts</summary>
+    <div class="collapsible-body">
+      <p style="font-size:13px;margin-bottom:12px;">
+        Run these as <strong>Background Scripts</strong> (System Definition &rarr; Scripts &mdash; Background) to get last month's record counts for each table. Copy the printed value into the corresponding input field above.
+      </p>
+
+      <div class="query-block">
+        <h4><code>syslog</code></h4>
+<pre><span class="comment">// syslog record count for last calendar month</span>
+<span class="keyword">var</span> ga = <span class="keyword">new</span> <span class="method">GlideAggregate</span>(<span class="string">'syslog'</span>);
+ga.<span class="method">addAggregate</span>(<span class="string">'COUNT'</span>);
+ga.<span class="method">addQuery</span>(<span class="string">'sys_created_on'</span>, <span class="string">'>='</span>, gs.<span class="method">beginningOfLastMonth</span>());
+ga.<span class="method">addQuery</span>(<span class="string">'sys_created_on'</span>, <span class="string">'&lt;'</span>, gs.<span class="method">endOfLastMonth</span>());
+ga.<span class="method">query</span>();
+<span class="keyword">if</span> (ga.<span class="method">next</span>())
+    gs.<span class="method">print</span>(<span class="string">'syslog last month: '</span> + ga.<span class="method">getAggregate</span>(<span class="string">'COUNT'</span>));</pre>
+      </div>
+
+      <div class="query-block">
+        <h4><code>syslog_transaction</code></h4>
+<pre><span class="comment">// syslog_transaction record count for last calendar month</span>
+<span class="keyword">var</span> ga = <span class="keyword">new</span> <span class="method">GlideAggregate</span>(<span class="string">'syslog_transaction'</span>);
+ga.<span class="method">addAggregate</span>(<span class="string">'COUNT'</span>);
+ga.<span class="method">addQuery</span>(<span class="string">'sys_created_on'</span>, <span class="string">'>='</span>, gs.<span class="method">beginningOfLastMonth</span>());
+ga.<span class="method">addQuery</span>(<span class="string">'sys_created_on'</span>, <span class="string">'&lt;'</span>, gs.<span class="method">endOfLastMonth</span>());
+ga.<span class="method">query</span>();
+<span class="keyword">if</span> (ga.<span class="method">next</span>())
+    gs.<span class="method">print</span>(<span class="string">'syslog_transaction last month: '</span> + ga.<span class="method">getAggregate</span>(<span class="string">'COUNT'</span>));</pre>
+      </div>
+
+      <div class="query-block">
+        <h4><code>sys_audit</code></h4>
+<pre><span class="comment">// sys_audit record count for last calendar month</span>
+<span class="keyword">var</span> ga = <span class="keyword">new</span> <span class="method">GlideAggregate</span>(<span class="string">'sys_audit'</span>);
+ga.<span class="method">addAggregate</span>(<span class="string">'COUNT'</span>);
+ga.<span class="method">addQuery</span>(<span class="string">'sys_created_on'</span>, <span class="string">'>='</span>, gs.<span class="method">beginningOfLastMonth</span>());
+ga.<span class="method">addQuery</span>(<span class="string">'sys_created_on'</span>, <span class="string">'&lt;'</span>, gs.<span class="method">endOfLastMonth</span>());
+ga.<span class="method">query</span>();
+<span class="keyword">if</span> (ga.<span class="method">next</span>())
+    gs.<span class="method">print</span>(<span class="string">'sys_audit last month: '</span> + ga.<span class="method">getAggregate</span>(<span class="string">'COUNT'</span>));</pre>
+      </div>
+
+      <div class="query-block">
+        <h4><code>sys_outbound_http_log</code></h4>
+<pre><span class="comment">// sys_outbound_http_log record count for last calendar month</span>
+<span class="keyword">var</span> ga = <span class="keyword">new</span> <span class="method">GlideAggregate</span>(<span class="string">'sys_outbound_http_log'</span>);
+ga.<span class="method">addAggregate</span>(<span class="string">'COUNT'</span>);
+ga.<span class="method">addQuery</span>(<span class="string">'sys_created_on'</span>, <span class="string">'>='</span>, gs.<span class="method">beginningOfLastMonth</span>());
+ga.<span class="method">addQuery</span>(<span class="string">'sys_created_on'</span>, <span class="string">'&lt;'</span>, gs.<span class="method">endOfLastMonth</span>());
+ga.<span class="method">query</span>();
+<span class="keyword">if</span> (ga.<span class="method">next</span>())
+    gs.<span class="method">print</span>(<span class="string">'sys_outbound_http_log last month: '</span> + ga.<span class="method">getAggregate</span>(<span class="string">'COUNT'</span>));</pre>
+      </div>
+    </div>
+  </details>
+
+  <!-- Disclaimer -->
+  <div class="disclaimer">
+    <strong>Disclaimer:</strong> Estimates are based on physical DB storage measurements from a real ServiceNow instance and are provided for planning purposes only. They are not a guarantee of actual LES data volume. Actual usage depends on instance configuration, customization density, integration activity, and log verbosity settings. Your admin team should monitor actual LES throughput using the Hermes Diagnostics page (/hermes_diagnostics.do) and the LES dashboard (/adcv2/dashboard) after enabling log export. The 100 GB/month Starter tier figure is a conservative working estimate &mdash; refer to your ServiceNow contract for exact entitlements. Conversion factors validated against a single production instance; results may vary.
+  </div>
+
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // --- Conversion factors (records per 1 MB of physical DB storage) ---
+  var FACTORS = {
+    syslog:                12900,
+    syslog_transaction:    780,
+    sys_audit:             1788,
+    sys_outbound_http_log: 900   // validated: 2,501,000 records = 2,778 MB (Aug 2026 production measurement)
+  };
+
+  // --- Node log baselines (GB per node per month) ---
+  var NODE_BASELINES = {
+    info:  30,   // Error + Warn + Info  (1.0x of 30 GB)
+    warn:  18,   // Error + Warn         (0.6x)
+    error: 10    // Error only           (0.3x — rounded from 9)
+  };
+
+  // --- LES Limits ---
+  var DAILY_CAP_GB  = 172.8;  // 2 MB/sec * 86400 sec / 1024
+  var STARTER_TIER_GB = 100;
+
+  // --- Presets (records/month) ---
+  var PRESETS = {
+    small:  { syslog: 1500000,  syslog_transaction: 300000,   sys_audit: 500000,   sys_outbound_http_log: 100000,   node_count: 2,  log_level: 'info' },
+    medium: { syslog: 7500000,  syslog_transaction: 2000000,  sys_audit: 3000000,  sys_outbound_http_log: 500000,   node_count: 6,  log_level: 'info' },
+    large:  { syslog: 30000000, syslog_transaction: 10000000, sys_audit: 15000000, sys_outbound_http_log: 3000000,  node_count: 16, log_level: 'info' }
+  };
+
+  // --- Comma separator state ---
+  var commasEnabled = true;
+  var commaToggle   = document.getElementById('commaToggle');
+
+  // --- Comma helpers ---
+  function formatWithCommas(str) {
+    var stripped = String(str).replace(/,/g, '');
+    if (stripped === '' || stripped === '0') return stripped;
+    var num = parseInt(stripped, 10);
+    if (isNaN(num)) return stripped;
+    return num.toLocaleString('en-US');
+  }
+
+  function stripCommas(str) {
+    return String(str).replace(/,/g, '');
+  }
+
+  // --- DOM refs ---
+  var inputs = {
+    syslog:                document.getElementById('syslog'),
+    syslog_transaction:    document.getElementById('syslog_transaction'),
+    sys_audit:             document.getElementById('sys_audit'),
+    sys_outbound_http_log: document.getElementById('sys_outbound_http_log'),
+    node_count:            document.getElementById('node_count'),
+    log_level:             document.getElementById('log_level')
+  };
+
+  var presetBtns    = document.querySelectorAll('.preset-btn');
+  var clearBtn      = document.getElementById('clearBtn');
+  var activePreset  = null;
+
+  // List of numeric text inputs (not log_level select)
+  var numericInputs = [inputs.syslog, inputs.syslog_transaction, inputs.sys_audit, inputs.sys_outbound_http_log, inputs.node_count];
+
+  // --- Helpers ---
+  function getVal(el) {
+    // Strip everything but digits (not just commas) so locale-formatted input
+    // (e.g. European "." thousands separators) parses correctly instead of truncating.
+    var digits = String(el.value).replace(/[^0-9]/g, '');
+    return digits === '' ? 0 : parseInt(digits, 10);
+  }
+
+  function fmt(n) {
+    if (n >= 100)  return n.toFixed(1);
+    if (n >= 10)   return n.toFixed(2);
+    if (n >= 1)    return n.toFixed(2);
+    if (n >= 0.01) return n.toFixed(3);
+    if (n === 0)   return '0.00';
+    return n.toFixed(4);
+  }
+
+  function fmtPct(n) {
+    if (n >= 100) return n.toFixed(1);
+    if (n >= 10)  return n.toFixed(1);
+    return n.toFixed(1);
+  }
+
+  function gaugeColor(pct) {
+    if (pct > 80) return 'red';
+    if (pct > 50) return 'yellow';
+    return 'green';
+  }
+
+  function statusClass(pct) {
+    if (pct > 80) return 'status-red';
+    if (pct > 50) return 'status-yellow';
+    return 'status-green';
+  }
+
+  // --- Reformat all numeric inputs ---
+  function reformatAllInputs() {
+    for (var i = 0; i < numericInputs.length; i++) {
+      var el = numericInputs[i];
+      var raw = stripCommas(el.value);
+      if (raw === '') continue;
+      el.value = commasEnabled ? formatWithCommas(raw) : raw;
+    }
+  }
+
+  // --- Calculation ---
+  function calculate() {
+    var results = {};
+    var totalMonth = 0;
+
+    // Table-based sources
+    var tables = ['syslog', 'syslog_transaction', 'sys_audit', 'sys_outbound_http_log'];
+    for (var i = 0; i < tables.length; i++) {
+      var t = tables[i];
+      var records = getVal(inputs[t]);
+      var mbMonth = records / FACTORS[t];
+      var gbMonth = mbMonth / 1024;
+      var gbDay   = gbMonth / 30;
+      results[t] = { gbMonth: gbMonth, gbDay: gbDay };
+      totalMonth += gbMonth;
+    }
+
+    // Node logs
+    var nodeCount = getVal(inputs.node_count);
+    var logLevel  = inputs.log_level.value;
+    var nodeGbMonth = nodeCount * NODE_BASELINES[logLevel];
+    var nodeGbDay   = nodeGbMonth / 30;
+    results.node = { gbMonth: nodeGbMonth, gbDay: nodeGbDay };
+    totalMonth += nodeGbMonth;
+
+    var totalDay = totalMonth / 30;
+
+    // --- Update breakdown table ---
+    for (var j = 0; j < tables.length; j++) {
+      var src = tables[j];
+      document.getElementById('bd_' + src + '_day').textContent   = fmt(results[src].gbDay);
+      document.getElementById('bd_' + src + '_month').textContent = fmt(results[src].gbMonth);
+    }
+    document.getElementById('bd_node_day').textContent   = fmt(nodeGbDay);
+    document.getElementById('bd_node_month').textContent = fmt(nodeGbMonth);
+    document.getElementById('bd_total_day').textContent   = fmt(totalDay);
+    document.getElementById('bd_total_month').textContent = fmt(totalMonth);
+
+    // --- Update summary ---
+    document.getElementById('totalGbDay').textContent   = fmt(totalDay) + ' GB';
+    document.getElementById('totalGbMonth').textContent = fmt(totalMonth) + ' GB';
+
+    // --- Cap gauge ---
+    var capPct  = totalDay > 0 ? (totalDay / DAILY_CAP_GB) * 100 : 0;
+    var capColor = gaugeColor(capPct);
+    document.getElementById('capPctText').textContent = fmtPct(capPct) + '%';
+    var capFill = document.getElementById('capFill');
+    capFill.style.width = Math.min(capPct, 100) + '%';
+    capFill.className = 'gauge-fill ' + capColor;
+    document.getElementById('capGauge').setAttribute('aria-valuenow', Math.round(capPct));
+
+    // --- Starter tier gauge ---
+    var starterPct  = totalMonth > 0 ? (totalMonth / STARTER_TIER_GB) * 100 : 0;
+    var starterColor = gaugeColor(starterPct);
+    document.getElementById('starterPctText').textContent = fmtPct(starterPct) + '%';
+    var starterFill = document.getElementById('starterFill');
+    starterFill.style.width = Math.min(starterPct, 100) + '%';
+    starterFill.className = 'gauge-fill ' + starterColor;
+    document.getElementById('starterGauge').setAttribute('aria-valuenow', Math.round(starterPct));
+
+    // --- Verdict ---
+    var verdict = document.getElementById('verdict');
+    if (totalMonth === 0) {
+      verdict.className = 'verdict empty';
+      verdict.textContent = 'Enter data above to see your estimate.';
+    } else if (starterPct <= 50) {
+      verdict.className = 'verdict within';
+      verdict.textContent = 'Comfortably within the 100 GB/month Starter tier (' + fmt(totalMonth) + ' GB estimated).';
+    } else if (starterPct <= 80) {
+      verdict.className = 'verdict within';
+      verdict.textContent = 'Within the Starter tier, but using ' + fmtPct(starterPct) + '% of 100 GB. Monitor growth.';
+    } else if (starterPct <= 100) {
+      verdict.className = 'verdict close';
+      verdict.textContent = 'Approaching the Starter tier limit at ' + fmtPct(starterPct) + '% (' + fmt(totalMonth) + ' GB). Plan for overage or reduce sources.';
+    } else {
+      var overageGb = totalMonth - STARTER_TIER_GB;
+      verdict.className = 'verdict over';
+      verdict.textContent = 'Exceeds the 100 GB Starter tier by ~' + fmt(overageGb) + ' GB (' + fmtPct(starterPct) + '%). A LES or Vault entitlement is required beyond the Starter tier — plan for an entitlement upgrade or reduce sources.';
+    }
+  }
+
+  // --- Preset handling ---
+  function applyPreset(size) {
+    var p = PRESETS[size];
+    if (!p) return;
+
+    inputs.syslog.value                = p.syslog;
+    inputs.syslog_transaction.value    = p.syslog_transaction;
+    inputs.sys_audit.value             = p.sys_audit;
+    inputs.sys_outbound_http_log.value = p.sys_outbound_http_log;
+    inputs.node_count.value            = p.node_count;
+    inputs.log_level.value             = p.log_level;
+
+    // Format with commas if enabled
+    if (commasEnabled) {
+      reformatAllInputs();
+    }
+
+    // Update button states
+    activePreset = size;
+    for (var i = 0; i < presetBtns.length; i++) {
+      var btn = presetBtns[i];
+      var isActive = btn.getAttribute('data-preset') === size;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    }
+
+    calculate();
+  }
+
+  function clearAll() {
+    inputs.syslog.value                = '';
+    inputs.syslog_transaction.value    = '';
+    inputs.sys_audit.value             = '';
+    inputs.sys_outbound_http_log.value = '';
+    inputs.node_count.value            = '';
+    inputs.log_level.value             = 'info';
+
+    activePreset = null;
+    for (var i = 0; i < presetBtns.length; i++) {
+      presetBtns[i].classList.remove('active');
+      presetBtns[i].setAttribute('aria-pressed', 'false');
+    }
+
+    calculate();
+  }
+
+  function deactivatePresets() {
+    if (activePreset !== null) {
+      activePreset = null;
+      for (var i = 0; i < presetBtns.length; i++) {
+        presetBtns[i].classList.remove('active');
+        presetBtns[i].setAttribute('aria-pressed', 'false');
+      }
+    }
+  }
+
+  // --- Comma toggle ---
+  commaToggle.addEventListener('click', function() {
+    commasEnabled = !commasEnabled;
+    commaToggle.setAttribute('aria-pressed', commasEnabled ? 'true' : 'false');
+    commaToggle.textContent = '1,000 separators: ' + (commasEnabled ? 'ON' : 'OFF');
+    reformatAllInputs();
+  });
+
+  // --- Event binding ---
+  for (var i = 0; i < presetBtns.length; i++) {
+    presetBtns[i].addEventListener('click', function() {
+      applyPreset(this.getAttribute('data-preset'));
+    });
+  }
+
+  clearBtn.addEventListener('click', clearAll);
+
+  // Focus/blur/input handlers for numeric text inputs
+  for (var j = 0; j < numericInputs.length; j++) {
+    (function(el) {
+      el.addEventListener('focus', function() {
+        // Strip commas on focus so user can type naturally
+        el.value = stripCommas(el.value);
+      });
+
+      el.addEventListener('blur', function() {
+        // Re-apply commas on blur if enabled
+        if (commasEnabled && el.value !== '') {
+          el.value = formatWithCommas(el.value);
+        }
+      });
+
+      el.addEventListener('input', function() {
+        deactivatePresets();
+        calculate();
+      });
+    })(numericInputs[j]);
+  }
+
+  inputs.log_level.addEventListener('change', function() {
+    deactivatePresets();
+    calculate();
+  });
+
+  // Initial calc
+  calculate();
+})();
+</script>
+
+</body>
+</html>
