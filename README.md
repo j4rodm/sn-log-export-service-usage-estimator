@@ -4,18 +4,6 @@ A browser-based planning calculator for ServiceNow Log Export Service (LES). Ent
 
 > **Pre-release:** The existing calculator has been migrated for review, not approved for public deployment. Its capacity, entitlement, and billing assumptions require confirmation, and known input-handling defects remain. Read the [review and release blockers](REVIEW.md) before relying on its results.
 
-## Run locally
-
-Open [index.html](index.html) directly in a modern browser. There is no build step, package installation, backend, or ServiceNow connection.
-
-For an optional local HTTP preview, run this from the repository root with Python 3:
-
-```sh
-python3 -m http.server 8000 --bind 127.0.0.1
-```
-
-Then open <http://127.0.0.1:8000/>. Stop the preview with Ctrl+C.
-
 ## Use the calculator
 
 1. Choose a size preset for an illustrative starting point, or enter your own **monthly** record counts.
@@ -26,17 +14,6 @@ Then open <http://127.0.0.1:8000/>. Stop the preview with Ctrl+C.
 The expandable query-help section contains example ServiceNow background scripts for obtaining record counts. The page never runs those scripts or connects to an instance. Have an authorized administrator review their scope and performance before running them.
 
 Use plain, non-negative whole-number inputs while the input-validation findings in [REVIEW.md](REVIEW.md) remain open. Period- or space-grouped input can currently be misread when the field loses focus.
-
-## What is included
-
-| File | Purpose |
-|---|---|
-| [index.html](index.html) | Default calculator, using the original Midnight Ink theme |
-| [les-estimator-trustbytes.html](les-estimator-trustbytes.html) | TrustBytes-themed alternative with the same calculation logic |
-| [REVIEW.md](REVIEW.md) | Migration validation, reproducible defects, and release gates |
-| [LICENSE](LICENSE) | Existing MIT license |
-
-Each calculator keeps its CSS and JavaScript inline. The default page has no external resource dependencies. The TrustBytes variant requests fonts from Google Fonts and uses local fallback fonts when those requests are unavailable. Neither page sends entered values to a server, stores them, or includes analytics.
 
 ## Estimation model
 
@@ -55,12 +32,12 @@ The UI labels these results as GB. The units and throughput-cap conversion need 
 
 ### Limitations
 
-- Database storage is not the same as serialized, compressed, or billable export volume. These are planning estimates, not billing predictions.
+- These are planning estimates, not billing predictions.
 - Presets and node-log baselines are illustrative, not validated sizing guarantees.
-- Only four table sources plus node logs are modeled. Other LES-supported sources are not included.
-- The displayed 2 MB/s throughput cap and 100 GB/month included allowance are unverified assumptions. Do not treat the verdict as contractual entitlement advice.
-- Monthly-to-daily conversion assumes 30 days, regardless of the calendar month.
-- Existing dashboard guidance and product/entitlement wording need verification.
+- Other LES-supported sources are not included, yet. Feel free to fork/add/PR if you'd like.
+- The displayed 2 MB/s throughput cap and 100 GB/month included allowance are assumptions. Do not treat the verdict as contractual entitlement advice.
+- These estimates were calculated based on a 30 day month.
+- Any dashboard guidance and product/entitlement wording need verification from your contract and current release notes.
 
 Consult the current [ServiceNow LES documentation](https://www.servicenow.com/docs/r/platform-security/les-landing-page.html), your agreement, and measured LES usage before making sizing or purchasing decisions. This is an independent planning aid, not an official ServiceNow sizing or licensing tool.
 
@@ -73,7 +50,7 @@ Keep the inline JavaScript in both HTML files identical when changing behavior. 
 - Separator toggle, blur/focus behavior, and formatted input.
 - Desktop and narrow-screen layout, keyboard access, and capacity gauges.
 
-The default calculator was renamed to [index.html](index.html) so a future static host can serve it at the site root. This migration does not configure GitHub Pages, publish a deployment, or push changes. Resolve the [release blockers](REVIEW.md) and obtain release approval before publishing or sharing a hosted calculator.
+The default calculator was renamed to [index.html](index.html) so the static host can serve it at the site root. This migration does not configure GitHub Pages, publish a deployment, or push changes. Resolve the [release blockers](REVIEW.md) and obtain release approval before publishing or sharing a hosted calculator.
 
 ## License
 
